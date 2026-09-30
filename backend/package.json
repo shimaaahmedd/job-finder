@@ -1,0 +1,44 @@
+{
+    "name": "job-finder",
+    "version": "0.1.0",
+    "description": "A job-finder tool: Apify discovery + Express/Postgres API.",
+    "private": true,
+    "type": "commonjs",
+    "main": "dist/index.js",
+    "scripts": {
+        "start": "tsx src/index.ts",
+        "dev": "nodemon --watch src --ext ts,sql --exec \"tsx src/index.ts\"",
+        "migrate": "tsx src/db/migrate.ts",
+        "discover": "tsx src/discovery/apify.ts",
+        "load-resumes": "tsx src/resumes/resumeLoader.ts",
+        "embed-resumes": "tsx src/matching/embeddings.ts",
+        "build": "tsc",
+        "typecheck": "tsc --noEmit",
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "dependencies": {
+        "apify-client": "^2.11.0",
+        "cors": "^2.8.6",
+        "dotenv": "^16.6.1",
+        "express": "^4.22.2",
+        "openai": "^6.46.0",
+        "pdf-parse": "^1.1.1",
+        "pg": "^8.21.0",
+        "zod": "^4.4.3"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/node": "^20.19.43",
+        "@types/pdf-parse": "^1.1.5",
+        "@types/pg": "^8.20.0",
+        "nodemon": "^3.1.14",
+        "prettier": "3.9.5",
+        "tsx": "^4.19.0",
+        "typescript": "^5.7.0"
+    }
+}

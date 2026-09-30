@@ -1,0 +1,48 @@
+{
+    "experienceThreshold": {
+        "enabled": true,
+        "maxYears": 4,
+        "description": "Reject jobs requiring 5+ years experience"
+    },
+    "excludedTitleKeywords": {
+        "enabled": true,
+        "keywords": [
+            "Senior",
+            "Director",
+            "Executive",
+            "VP",
+            "Principal",
+            "Staff Engineer",
+            "Lead",
+            "Founding Engineer",
+            "Engineer #1",
+            "First Engineer"
+        ],
+        "description": "Reject jobs containing these keywords in the job title only"
+    },
+    "excludedDescriptionKeywords": {
+        "enabled": true,
+        "keywords": ["Founding Engineer", "Engineer #1", "First Engineer"],
+        "description": "Reject jobs containing these keywords in the description"
+    },
+    "salaryFloor": {
+        "enabled": true,
+        "minimumUSD": 70000,
+        "description": "Reject jobs where max salary is below this amount"
+    },
+    "excludeInternships": {
+        "enabled": true,
+        "keywords": ["intern", "internship"],
+        "description": "Reject internship roles — checked against title only"
+    },
+    "excludeApplyTypes": {
+        "enabled": true,
+        "keywords": ["easy_apply"],
+        "description": "Reject easly apply roles"
+    },
+    "excludedKeywords": {
+        "enabled": true,
+        "keywords": [],
+        "description": "Custom keywords to reject — add your own anytime"
+    }
+}
