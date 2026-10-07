@@ -21,7 +21,7 @@ export const ScoreBadge = ({
     highScore: number;
     threshold: number;
 }) => {
-    const mode = getBadgeColor(score, highScore, threshold);
+    const mode = getBadgeColor(score, threshold, highScore);
 
     return <div className={cn("rounded-xl m-1 px-3 py-1", mode)}>{score}</div>;
 };

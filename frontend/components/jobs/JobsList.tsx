@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useJobs } from "@/hooks/useJobs";
-import { JobStatus } from "@/types/job";
+import { ApplicationStatus, JobStatus } from "@/types/job";
 import { JobCard } from "./JobCard";
 import { HighScoreInput } from "./HighScoreInput";
 import { StatusFilter } from "./StatusFilter";
+import { ApplicationStatusFilter } from "./ApplicationStatusFilter";
+import { ExpireToggle } from "./ExpireToggle";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 21;
 
 export function JobsList() {
     const [highScore, setHighScore] = useState<number | null>(null);
@@ -15,14 +17,32 @@ export function JobsList() {
     const [status, setStatus] = useState<JobStatus | undefined>(
         JobStatus.PassedLlm
     );
+    const [applicationStatus, setApplicationStatus] = useState<
+        ApplicationStatus | undefined
+    >(ApplicationStatus.NotApplied);
+    const [active, setActive] = useState(true);
 
     const handleStatusChange = (newStatus: JobStatus | undefined) => {
         setStatus(newStatus);
         setPage(0); // reset page so you don't land on an empty page
     };
 
+    const handleApplicationStatusChange = (
+        newStatus: ApplicationStatus | undefined
+    ) => {
+        setApplicationStatus(newStatus);
+        setPage(0); // reset page so you don't land on an empty page
+    };
+
+    const toggleExpiryStatusChange = () => {
+        setActive((prev) => !prev);
+        setPage(0);
+    };
+
     const { data, isLoading, isError } = useJobs({
         status,
+        applicationStatus,
+        active,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
     });
@@ -31,10 +51,25 @@ export function JobsList() {
         <StatusFilter status={status} onChange={handleStatusChange} />
     );
 
+    const applicationFilter = (
+        <ApplicationStatusFilter
+            applicationStatus={applicationStatus}
+            onChange={handleApplicationStatusChange}
+        />
+    );
+
+    const expiryToggle = (
+        <ExpireToggle active={active} onClick={toggleExpiryStatusChange} />
+    );
+
     if (isLoading)
         return (
             <div className="flex flex-col p-4">
-                {filter}
+                <div className="flex gap-4">
+                    {filter}
+                    {applicationFilter}
+                    {expiryToggle}
+                </div>
                 <p>Loading...</p>
             </div>
         );
@@ -42,7 +77,11 @@ export function JobsList() {
     if (isError)
         return (
             <div className="flex flex-col p-4">
-                {filter}
+                <div className="flex gap-4">
+                    {filter}
+                    {applicationFilter}
+                    {expiryToggle}
+                </div>
                 <p>Something went wrong.</p>
             </div>
         );
@@ -50,7 +89,11 @@ export function JobsList() {
     if (!data || data.items.length === 0)
         return (
             <div className="flex flex-col p-4 gap-4">
-                {filter}
+                <div className="flex gap-4">
+                    {filter}
+                    {applicationFilter}
+                    {expiryToggle}
+                </div>
                 <p className="pl-4">No jobs yet.</p>
             </div>
         );
@@ -61,7 +104,11 @@ export function JobsList() {
         <div className="flex flex-col p-4 w-full justify-between gap-4">
             <div className="flex gap-4 flex-col">
                 <div className="flex  justify-between w-full flex-wrap">
-                    {filter}
+                    <div className="flex gap-4">
+                        {filter}
+                        {applicationFilter}
+                        {expiryToggle}
+                    </div>
                     <HighScoreInput
                         onChange={setHighScore}
                         highScore={highScore}

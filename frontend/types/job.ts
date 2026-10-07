@@ -10,10 +10,22 @@ export const JobStatus = {
     MatchedResume: "matched_resume", // passed resume matcher
     PassedLlm: "passed_llm", // passed LLM matcher
     Rejected: "rejected", // filtered out (see rejection_reason)
-    Applied: "applied", // we have applied to it
 } as const;
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
+
+export const ApplicationStatus = {
+    NotApplied: "not_applied",
+    Saved: "saved",
+    Applied: "applied",
+    Interviewing: "interviewing",
+    Offer: "offer",
+    DeclinedByCompany: "declined_by_company",
+    NotInterested: "not_interested",
+} as const;
+
+export type ApplicationStatus =
+    (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
 /** How an application is submitted. */
 export const ApplyType = {
@@ -48,6 +60,7 @@ export interface Job {
     link: string | null;
     applyType: ApplyType;
     status: JobStatus;
+    applicationStatus: ApplicationStatus | null;
     rejectionReason: RejectionReason | null;
     rejectionDetails: string | null;
     source: string;
@@ -57,7 +70,10 @@ export interface Job {
     suggestedResume: string | null;
     suggestedResumeLabel: string | null;
     suggestedResumeVersion: number | null;
-    threshold: number | null;
+    cosineThreshold: number | null;
+    llmThreshold: number | null;
+    appliedAt: string | null;
+    closedAt: string | null;
     createdAt: string;
 }
 
