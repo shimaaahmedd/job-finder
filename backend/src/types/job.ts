@@ -14,10 +14,22 @@ export const JobStatus = {
     MatchedResume: "matched_resume", // passed resume matcher
     PassedLlm: "passed_llm", // passed LLM matcher
     Rejected: "rejected", // filtered out (see rejection_reason)
-    Applied: "applied", // we have applied to it
 } as const;
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
+
+export const ApplicationStatus = {
+    NotApplied: "not_applied",
+    Saved: "saved",
+    Applied: "applied",
+    Interviewing: "interviewing",
+    Offer: "offer",
+    DeclinedByCompany: "declined_by_company",
+    NotInterested: "not_interested",
+} as const;
+
+export type ApplicationStatus =
+    (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
 /** Which pipeline stage rejected a job. Details go in rejection_details. */
 export const RejectionReason = {
@@ -101,7 +113,11 @@ export interface JobRecord {
     industries: string | null;
     job_function: string | null;
     applicants_count: number | null;
-    threshold: number | null;
+    cosine_threshold: number | null;
+    llm_threshold: number | null;
+    application_status: string | null;
+    applied_at: string | null;
+    closed_at: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -111,7 +127,7 @@ export interface JobMatchResult {
     job: ApifyJobResult;
     resumeId: string;
     cosineScore: number;
-    threshold: number; // 0.7 by default
+    cosineThreshold: number;
 }
 
 /** A job's LLM fit score and one-line reasoning. */
@@ -119,7 +135,7 @@ export interface JobLLMMatchResult {
     job: ApifyJobResult;
     llmScore: number;
     llmReasoning: string;
-    threshold: number; // 0.7 by default
+    llmThreshold: number;
 }
 
 /** One row in the jobs list. No description: that lives on JobDetail. */
@@ -144,7 +160,11 @@ export interface JobListItem {
     suggestedResume: string | null;
     suggestedResumeLabel: string | null;
     suggestedResumeVersion: number | null;
-    threshold: number | null;
+    cosineThreshold: number | null;
+    llmThreshold: number | null;
+    applicationStatus: string | null;
+    appliedAt: Date | null;
+    closedAt: Date | null;
     postedAt: Date | null;
     createdAt: Date;
 }

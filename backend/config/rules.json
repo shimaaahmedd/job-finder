@@ -5,7 +5,7 @@
         "description": "Reject jobs requiring 5+ years experience"
     },
     "excludedTitleKeywords": {
-        "enabled": true,
+        "enabled": false,
         "keywords": [
             "Senior",
             "Director",
@@ -16,8 +16,10 @@
             "Lead",
             "Founding Engineer",
             "Engineer #1",
-            "First Engineer"
+            "First Engineer",
+            "Sr"
         ],
+        "allowedPhrases": ["Mid-Senior", "Mid Senior"],
         "description": "Reject jobs containing these keywords in the job title only"
     },
     "excludedDescriptionKeywords": {

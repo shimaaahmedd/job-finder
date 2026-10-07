@@ -1,6 +1,7 @@
 import { pool } from "./connection";
-import type {
+import {
     ApifyJobResult,
+    ApplicationStatus,
     JobListItem,
     JobSource,
     JobStatus,
@@ -44,7 +45,8 @@ export async function saveJob(
         llmScore?: number | null;
         suggestedResume?: string | null;
         cosineScore?: number | null;
-        threshold?: number | null;
+        cosineThreshold?: number | null;
+        llmThreshold?: number | null;
         source?: JobSource | null;
     }
 ): Promise<void> {
@@ -54,10 +56,11 @@ export async function saveJob(
        employment_type, salary, posted_at, apply_url, link, company_website,
        company_description, job_poster_profile_url, apply_type, industries,
        job_function, applicants_count, status, rejection_reason, rejection_details, source,
-       input_url, llm_score, llm_reasoning, suggested_resume, cosine_score, threshold
+       input_url, llm_score, llm_reasoning, suggested_resume, cosine_score,
+       cosine_threshold, llm_threshold
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-       COALESCE($19, 'new'), $20, $21, $22, $23, $24, $25, $26, $27, $28
+       COALESCE($19, 'new'), $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
      )
      ON CONFLICT (id) DO UPDATE SET
        title                  = EXCLUDED.title,
@@ -86,7 +89,8 @@ export async function saveJob(
        llm_reasoning          = EXCLUDED.llm_reasoning,
        suggested_resume       = EXCLUDED.suggested_resume,
        cosine_score           = EXCLUDED.cosine_score,
-       threshold              = EXCLUDED.threshold,
+       cosine_threshold       = EXCLUDED.cosine_threshold,
+       llm_threshold          = EXCLUDED.llm_threshold,
        updated_at             = NOW()`,
         [
             job.id,
@@ -116,13 +120,15 @@ export async function saveJob(
             details?.llmReasoning ?? null,
             details?.suggestedResume ?? null,
             details?.cosineScore ?? null,
-            details?.threshold ?? null,
+            details?.cosineThreshold ?? null,
+            details?.llmThreshold ?? null,
         ]
     );
 }
 
 type UpdateJobDetails = {
-    status: JobStatus;
+    status?: JobStatus;
+    applicationStatus?: ApplicationStatus;
     rejectionReason?: RejectionReason | null;
     rejectionDetails?: string | null;
     cosineScore?: number | null;
@@ -130,7 +136,8 @@ type UpdateJobDetails = {
     llmReasoning?: string | null;
     suggestedResume?: string | null;
     source?: JobSource | null;
-    threshold?: number | null;
+    cosineThreshold?: number | null;
+    llmThreshold?: number | null;
 };
 
 /** snake_case DB column for each updatable field. */
@@ -143,80 +150,131 @@ const JOB_COLUMNS: Record<keyof UpdateJobDetails, string> = {
     llmReasoning: "llm_reasoning",
     suggestedResume: "suggested_resume",
     source: "source",
-    threshold: "threshold",
+    cosineThreshold: "cosine_threshold",
+    llmThreshold: "llm_threshold",
+    applicationStatus: "application_status",
 };
+
+/**
+ * The JobListItem columns, shared by every query that returns one. Expects the
+ * job row aliased as `j`; pair it with JOB_LIST_RESUME_JOIN for the resume label.
+ */
+const JOB_LIST_COLUMNS = `
+    j.id,
+    j.title,
+    j.company_name         AS "companyName",
+    j.location,
+    j.seniority_level      AS "seniorityLevel",
+    j.employment_type      AS "employmentType",
+    j.salary,
+    j.apply_url            AS "applyUrl",
+    j.link,
+    j.apply_type           AS "applyType",
+    j.status,
+    j.rejection_reason     AS "rejectionReason",
+    j.rejection_details    AS "rejectionDetails",
+    j.source,
+    j.cosine_score         AS "cosineScore",
+    j.llm_score            AS "llmScore",
+    j.llm_reasoning        AS "llmReasoning",
+    j.suggested_resume     AS "suggestedResume",
+    r.label                AS "suggestedResumeLabel",
+    r.version              AS "suggestedResumeVersion",
+    j.cosine_threshold     AS "cosineThreshold",
+    j.llm_threshold        AS "llmThreshold",
+    j.application_status   AS "applicationStatus",
+    j.closed_at            AS "closedAt",
+    j.applied_at           AS "appliedAt",
+    j.posted_at            AS "postedAt",
+    j.created_at           AS "createdAt"
+`;
+
+// suggested_resume holds a resumes.id (uuid) in a varchar column.
+const JOB_LIST_RESUME_JOIN = `LEFT JOIN resumes r ON r.id::text = j.suggested_resume`;
 
 /**
  * Move a job to a new status. Only fields present in `details` are written —
  * an omitted field is left untouched, while an explicit `null` clears it.
+ * Setting applicationStatus to applied stamps applied_at once; not_applied
+ * clears it.
+ * Returns the updated job (same shape as the list), or null if `id` doesn't exist.
  */
 export async function updateJob(
     id: string,
     details: UpdateJobDetails
-): Promise<void> {
+): Promise<JobListItem | null> {
     const entries = (
         Object.entries(details) as [keyof UpdateJobDetails, unknown][]
     ).filter(([, value]) => value !== undefined);
 
-    const setClause = entries
-        .map(([key], i) => `${JOB_COLUMNS[key]} = $${i + 2}`)
-        .join(", ");
+    const assignments = entries.map(
+        ([key], i) => `${JOB_COLUMNS[key]} = $${i + 2}`
+    );
+    // Keep the first applied date: going Applied -> Interviewing -> Applied
+    // shouldn't move it (same idea as closed_at in markJobAsClosed).
+    if (details.applicationStatus === ApplicationStatus.Applied) {
+        assignments.push("applied_at = COALESCE(applied_at, NOW())");
+    } else if (details.applicationStatus === ApplicationStatus.NotApplied) {
+        // Undoing "applied" clears the date.
+        assignments.push("applied_at = NULL");
+    }
+
+    assignments.push("updated_at = NOW()");
+
+    const setClause = assignments.join(", ");
     const values = entries.map(([, value]) => value);
 
-    await pool.query(
-        `UPDATE jobs SET ${setClause}, updated_at = NOW() WHERE id = $1`,
+    // The CTE lets one round trip both update the row and join its resume label.
+    const { rows } = await pool.query<JobListItem>(
+        `WITH j AS (
+            UPDATE jobs SET ${setClause} WHERE id = $1 RETURNING *
+        )
+        SELECT ${JOB_LIST_COLUMNS} FROM j ${JOB_LIST_RESUME_JOIN}`,
         [id, ...values]
     );
+    return rows[0] ?? null;
 }
 
-/** Return all jobs in a given status (or every job when omitted), newest first. */
+/**
+ * One page of jobs filtered by status, applicationStatus and active (true = not
+ * closed); an undefined filter matches everything. Best LLM score first, then
+ * newest.
+ */
 export async function getJobsByStatus(
     status: JobStatus | undefined,
+    applicationStatus: ApplicationStatus | undefined,
+    active: boolean | undefined,
     limit = 25,
     offset = 0
 ): Promise<Paginated<JobListItem>> {
     const listQuery = `
-        SELECT
-            j.id,
-            j.title,
-            j.company_name         AS "companyName",
-            j.location,
-            j.seniority_level      AS "seniorityLevel",
-            j.employment_type      AS "employmentType",
-            j.salary,
-            j.apply_url            AS "applyUrl",
-            j.link,
-            j.apply_type           AS "applyType",
-            j.status,
-            j.rejection_reason     AS "rejectionReason",
-            j.rejection_details    AS "rejectionDetails",
-            j.source,
-            j.cosine_score         AS "cosineScore",
-            j.llm_score            AS "llmScore",
-            j.llm_reasoning        AS "llmReasoning",
-            j.suggested_resume     AS "suggestedResume",
-            r.label                AS "suggestedResumeLabel",
-            r.version              AS "suggestedResumeVersion",
-            j.threshold,
-            j.posted_at            AS "postedAt",
-            j.created_at           AS "createdAt"
+        SELECT ${JOB_LIST_COLUMNS}
         FROM jobs j
-        -- suggested_resume holds a resumes.id (uuid) in a varchar column.
-        LEFT JOIN resumes r ON r.id::text = j.suggested_resume
-        WHERE $1::varchar IS NULL OR j.status = $1
+        ${JOB_LIST_RESUME_JOIN}
+        WHERE ($1::varchar IS NULL OR j.status = $1) AND ($2::varchar IS NULL OR j.application_status = $2) AND ($3::boolean IS NULL OR (j.closed_at IS NULL) = $3)
         ORDER BY
             j.llm_score DESC NULLS LAST,
             j.posted_at DESC NULLS LAST,
             j.created_at DESC,
             j.id
-        LIMIT $2 OFFSET $3
+        LIMIT $4 OFFSET $5
     `;
 
-    const countQuery = `SELECT count(*)::int AS total FROM jobs WHERE $1::varchar IS NULL OR status = $1`;
+    const countQuery = `SELECT count(*)::int AS total FROM jobs WHERE ($1::varchar IS NULL OR status = $1) AND ($2::varchar IS NULL OR application_status = $2) AND ($3::boolean IS NULL OR (closed_at IS NULL) = $3)`;
 
     const [listResult, countResult] = await Promise.all([
-        pool.query<JobListItem>(listQuery, [status ?? null, limit, offset]),
-        pool.query<{ total: number }>(countQuery, [status ?? null]),
+        pool.query<JobListItem>(listQuery, [
+            status ?? null,
+            applicationStatus ?? null,
+            active ?? null,
+            limit,
+            offset,
+        ]),
+        pool.query<{ total: number }>(countQuery, [
+            status ?? null,
+            applicationStatus ?? null,
+            active ?? null,
+        ]),
     ]);
 
     return {
@@ -239,7 +297,7 @@ export type JobWithStatus = {
     status: JobStatus | undefined;
     suggestedResume: string | null;
     cosineScore: number | null;
-    threshold: number | null;
+    cosineThreshold: number | null;
 };
 
 /**
@@ -252,7 +310,7 @@ export async function getResumableJobs(): Promise<JobWithStatus[]> {
             status: JobStatus;
             suggestedResume: string | null;
             cosineScore: number | null;
-            threshold: number | null;
+            cosineThreshold: number | null;
         }
     >(
         `SELECT
@@ -279,18 +337,24 @@ export async function getResumableJobs(): Promise<JobWithStatus[]> {
             status,
             suggested_resume                 AS "suggestedResume",
             cosine_score                     AS "cosineScore",
-            threshold
+            cosine_threshold                 AS "cosineThreshold"
         FROM jobs
         WHERE status IN ('new', 'passed_rule', 'matched_resume')`
     );
 
     return rows.map(
-        ({ status, suggestedResume, cosineScore, threshold, ...job }) => ({
+        ({
+            status,
+            suggestedResume,
+            cosineScore,
+            cosineThreshold,
+            ...job
+        }) => ({
             job,
             status,
             suggestedResume,
             cosineScore,
-            threshold,
+            cosineThreshold,
         })
     );
 }
@@ -304,9 +368,9 @@ export async function attachJobStatus(
         status: JobStatus;
         suggested_resume: string | null;
         cosine_score: number | null;
-        threshold: number | null;
+        cosine_threshold: number | null;
     }>(
-        `SELECT id, status, suggested_resume, cosine_score, threshold FROM jobs WHERE id = ANY($1)`,
+        `SELECT id, status, suggested_resume, cosine_score, cosine_threshold FROM jobs WHERE id = ANY($1)`,
         [jobs.map((job) => job.id)]
     );
 
@@ -318,7 +382,19 @@ export async function attachJobStatus(
             status: row?.status,
             suggestedResume: row?.suggested_resume ?? null,
             cosineScore: row?.cosine_score ?? null,
-            threshold: row?.threshold ?? null,
+            cosineThreshold: row?.cosine_threshold ?? null,
         };
     });
+}
+
+/** Mark a job as closed. Returns the updated job, or null if `id` doesn't exist. */
+export async function markJobAsClosed(id: string): Promise<JobListItem | null> {
+    const { rows } = await pool.query<JobListItem>(
+        `WITH j AS (
+            UPDATE jobs SET closed_at = COALESCE(closed_at, NOW()), updated_at = NOW() WHERE id = $1 RETURNING *
+        )
+        SELECT ${JOB_LIST_COLUMNS} FROM j ${JOB_LIST_RESUME_JOIN}`,
+        [id]
+    );
+    return rows[0] ?? null;
 }

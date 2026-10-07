@@ -5,6 +5,8 @@ import searchRouter from "./routes/search";
 import resumesRouter from "./routes/resumes";
 import pipelineRouter from "./routes/pipeline";
 import cors from "cors";
+import { pinoHttp } from "pino-http";
+import { logger } from "../lib/logger";
 
 /**
  * Builds the Express application: middleware + mounted routes.
@@ -15,6 +17,8 @@ export function createServer(): Application {
     const app = express();
 
     app.use(cors({ origin: process.env.FRONTEND_URL }));
+
+    app.use(pinoHttp({ logger }));
 
     // Parse JSON request bodies into req.body.
     app.use(express.json());

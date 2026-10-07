@@ -22,12 +22,38 @@ const rules: RulesConfig = JSON.parse(readFileSync(rulesPath, "utf8"));
 
 // --- small text parsers -------------------------------------------------
 
-/** Largest "N years" / "N+ yrs" figure mentioned in the text, else null. */
-function parseMaxRequiredYears(text?: string): number | null {
+/** Lowest "N years of experience" requirement in the text, or null if none is found. */
+function parseRequiredYears(text?: string): number | null {
     if (!text) return null;
-    const matches = [...text.matchAll(/(\d+)\s*\+?\s*(?:years|yrs)/gi)];
-    if (matches.length === 0) return null;
-    return Math.max(...matches.map((m) => Number(m[1])));
+
+    // Ignore numbers above this (e.g. "over 100 years" of company history)
+    const MAX_PLAUSIBLE_YEARS = 15;
+
+    // "7+ years", "4-6+ years", "3 to 5 yrs": group 1 is always the minimum
+    const YEARS_RE =
+        /\b(\d{1,2})(?:\s*(?:-|–|to)\s*\d{1,2})?\s*\+?\s*(?:years?|yrs?)\b/gi;
+
+    // The segment must mention experience
+    const EXPERIENCE_RE = /\bexp(?:erience[ds]?)?\b/i;
+
+    // Split into bullets (newlines) and sentences
+    const SEGMENT_SPLIT_RE = /\n|(?<=[.!?])\s+/;
+
+    const values: number[] = [];
+
+    for (const segment of text.split(SEGMENT_SPLIT_RE)) {
+        // Skip segments that don't talk about experience
+        if (!EXPERIENCE_RE.test(segment)) continue;
+
+        // Collect every "N years" figure in the segment
+        for (const match of segment.matchAll(YEARS_RE)) {
+            const years = Number(match[1]);
+            if (years <= MAX_PLAUSIBLE_YEARS) values.push(years);
+        }
+    }
+
+    // Use the lowest requirement: "2+ yrs React, 5+ yrs AWS" -> 2 (passes a max of 4)
+    return values.length > 0 ? Math.min(...values) : null;
 }
 
 /**
@@ -55,10 +81,32 @@ function parseMaxSalaryUSD(salary?: string): number | null {
     return max;
 }
 
-/** Does `text` contain any of `keywords` (case-insensitive)? Returns the hit. */
-function findKeyword(text: string, keywords: string[]): string | undefined {
-    const haystack = text.toLowerCase();
-    return keywords.find((k) => haystack.includes(k.toLowerCase()));
+/** Escape a string for literal use inside a RegExp. */
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Does `text` contain any of `keywords` as a whole word (case-insensitive)?
+ * Returns the hit. "intern" won't match "Internal", "Lead" won't match
+ * "Leading". Phrases in `allowed` are removed first, so allowing
+ * "Mid-Senior" keeps it from tripping "Senior".
+ */
+function findKeyword(
+    text: string,
+    keywords: string[],
+    allowed: string[] = []
+): string | undefined {
+    const haystack = allowed.reduce(
+        (acc, phrase) =>
+            acc.replace(new RegExp(escapeRegExp(phrase), "gi"), " "),
+        text
+    );
+    return keywords.find((k) =>
+        new RegExp(`(?<![a-z0-9])${escapeRegExp(k)}(?![a-z0-9])`, "i").test(
+            haystack
+        )
+    );
 }
 
 // --- rule evaluation ----------------------------------------------------
@@ -68,7 +116,7 @@ function evaluate(job: ApifyJobResult): string | null {
     // 1. Too many years of experience required.
     const exp = rules.experienceThreshold;
     if (exp.enabled) {
-        const required = parseMaxRequiredYears(job.descriptionText);
+        const required = parseRequiredYears(job.descriptionText);
         if (required !== null && required > exp.maxYears) {
             return `Requires ${required} years of experience (max ${exp.maxYears})`;
         }
@@ -77,7 +125,11 @@ function evaluate(job: ApifyJobResult): string | null {
     // 2. Excluded keyword in the job title.
     const titleKeywords = rules.excludedTitleKeywords;
     if (titleKeywords.enabled) {
-        const hit = findKeyword(job.title, titleKeywords.keywords);
+        const hit = findKeyword(
+            job.title,
+            titleKeywords.keywords,
+            titleKeywords.allowedPhrases
+        );
         if (hit) return `Excluded title keyword: "${hit}"`;
     }
 

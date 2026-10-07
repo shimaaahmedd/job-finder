@@ -1,13 +1,13 @@
 import { getAllActiveResumesWithEmbedding } from "../db/resumeRepository";
 import { ApifyJobResult, JobMatchResult } from "../types/job";
 import { Resume } from "../types/resume";
-import { PASSING_THRESHOLD } from "./constants";
+import { SEMANTIC_THRESHOLD } from "./constants";
 import { generateEmbeddings } from "./embeddings";
 import { constructJobText } from "./jobText";
 
 /**
  * Semantic matcher: embeds each job and picks the active resume whose
- * embedding is closest to it. Jobs whose best match clears PASSING_THRESHOLD
+ * embedding is closest to it. Jobs whose best match clears SEMANTIC_THRESHOLD
  * move on to LLM scoring; the rest are rejected.
  */
 
@@ -34,7 +34,7 @@ export async function matchJobToResume(
         );
         return {
             resumeId: resume.id,
-            cosineScore: cosineScore,
+            cosineScore,
         };
     });
 
@@ -47,7 +47,7 @@ export async function matchJobToResume(
 }
 
 /**
- * Match every job to its best resume and split by PASSING_THRESHOLD.
+ * Match every job to its best resume and split by SEMANTIC_THRESHOLD.
  * With no embedded resumes there's nothing to match against, so both lists
  * come back empty (jobs keep their current status).
  */
@@ -83,14 +83,24 @@ export async function matchJobs(jobs: ApifyJobResult[]): Promise<{
             return {
                 ...matchedJob,
                 job: jobs[index],
-                threshold: PASSING_THRESHOLD,
+                cosineThreshold: SEMANTIC_THRESHOLD,
             };
         })
     );
 
-    // Return job matches
+    // Compare on the raw score and round to 2 decimals only for storage,
+    // so e.g. 0.395 doesn't round up past the threshold.
+    const rounded = (j: JobMatchResult): JobMatchResult => ({
+        ...j,
+        cosineScore: Math.round(j.cosineScore * 100) / 100,
+    });
+
     return {
-        passed: jobMatches.filter((j) => j.cosineScore >= PASSING_THRESHOLD),
-        rejected: jobMatches.filter((j) => j.cosineScore < PASSING_THRESHOLD),
+        passed: jobMatches
+            .filter((j) => j.cosineScore >= SEMANTIC_THRESHOLD)
+            .map(rounded),
+        rejected: jobMatches
+            .filter((j) => j.cosineScore < SEMANTIC_THRESHOLD)
+            .map(rounded),
     };
 }

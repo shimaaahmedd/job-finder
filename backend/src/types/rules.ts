@@ -21,6 +21,8 @@ export interface SalaryFloorRule extends BaseRule {
 /** A rule that rejects when any of `keywords` is found in the relevant text. */
 export interface KeywordRule extends BaseRule {
     keywords: string[];
+    /** Phrases ignored before matching, e.g. "Mid-Senior" so it doesn't trip "Senior". */
+    allowedPhrases?: string[];
 }
 
 export interface RulesConfig {
