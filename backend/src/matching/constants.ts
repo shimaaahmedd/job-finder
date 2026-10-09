@@ -3,7 +3,7 @@
  * job to move on to LLM scoring. Stored on the job row as `cosine_threshold`
  * so we know what cutoff it was judged against.
  */
-export const SEMANTIC_THRESHOLD = 0.7;
+export const COSINE_THRESHOLD = 0.5;
 
 /**
  * Minimum LLM fit score (0-1) a job needs to pass. Stored on the job row as

@@ -1,13 +1,13 @@
 import { getAllActiveResumesWithEmbedding } from "../db/resumeRepository";
 import { ApifyJobResult, JobMatchResult } from "../types/job";
 import { Resume } from "../types/resume";
-import { SEMANTIC_THRESHOLD } from "./constants";
+import { COSINE_THRESHOLD } from "./constants";
 import { generateEmbeddings } from "./embeddings";
 import { constructJobText } from "./jobText";
 
 /**
  * Semantic matcher: embeds each job and picks the active resume whose
- * embedding is closest to it. Jobs whose best match clears SEMANTIC_THRESHOLD
+ * embedding is closest to it. Jobs whose best match clears COSINE_THRESHOLD
  * move on to LLM scoring; the rest are rejected.
  */
 
@@ -47,7 +47,7 @@ export async function matchJobToResume(
 }
 
 /**
- * Match every job to its best resume and split by SEMANTIC_THRESHOLD.
+ * Match every job to its best resume and split by COSINE_THRESHOLD.
  * With no embedded resumes there's nothing to match against, so both lists
  * come back empty (jobs keep their current status).
  */
@@ -83,7 +83,7 @@ export async function matchJobs(jobs: ApifyJobResult[]): Promise<{
             return {
                 ...matchedJob,
                 job: jobs[index],
-                cosineThreshold: SEMANTIC_THRESHOLD,
+                cosineThreshold: COSINE_THRESHOLD,
             };
         })
     );
@@ -97,10 +97,10 @@ export async function matchJobs(jobs: ApifyJobResult[]): Promise<{
 
     return {
         passed: jobMatches
-            .filter((j) => j.cosineScore >= SEMANTIC_THRESHOLD)
+            .filter((j) => j.cosineScore >= COSINE_THRESHOLD)
             .map(rounded),
         rejected: jobMatches
-            .filter((j) => j.cosineScore < SEMANTIC_THRESHOLD)
+            .filter((j) => j.cosineScore < COSINE_THRESHOLD)
             .map(rounded),
     };
 }

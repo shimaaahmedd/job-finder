@@ -6,6 +6,7 @@ import { getResume } from "../db/resumeRepository";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { LLM_THRESHOLD } from "./constants";
+import { loadSearchConfig } from "../discovery/linkedin/apify";
 
 /**
  * Matches jobs to resumes in two steps:
@@ -17,6 +18,10 @@ import { LLM_THRESHOLD } from "./constants";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const CONCURRENCY = 5;
+// Requirements usually sit past the first 2000 chars, so the LLM gets far more
+// of the description than the embedding does. Covers the longest postings
+// seen so far (~11k chars, ~3k tokens).
+const LLM_DESCRIPTION_LIMIT = 12000;
 
 const apiKey = process.env.OPENAI_API_KEY;
 
@@ -39,7 +44,6 @@ const RequirementSchema = z.object({
         "seniority",
         "degree",
         "domain",
-        "location",
         "other",
     ]),
     mustHave: z.boolean(),
@@ -74,8 +78,10 @@ const NICE_TO_HAVE_WEIGHT = 1;
 const CAP_PRIMARY_LANGUAGE_MISMATCH = 0.3;
 const CAP_SENIORITY_TWO_PLUS = 0.3;
 const CAP_TWO_MISSING_MUST_HAVES = 0.35;
-// Soft cap: limits how high the score can go, but the job can still pass.
-const CAP_SENIORITY_ONE_LEVEL = 0.7;
+// Soft cap: limits how high the score can go, but the job can still pass, so
+// it must stay at or above LLM_THRESHOLD. A one-level stretch job that passes
+// always ranks below a strong job at your level.
+const CAP_SENIORITY_ONE_LEVEL = LLM_THRESHOLD;
 const PENALTY_PER_ENV_MISMATCH = 0.05;
 
 const computeScore = (audit: LLMAudit): number => {
@@ -90,6 +96,10 @@ const computeScore = (audit: LLMAudit): number => {
     );
 
     let score = earned / total;
+
+    // Penalties first, caps last: a cap is a ceiling on the final score, so a
+    // penalty applied after it could push a soft-capped job under the threshold.
+    score -= PENALTY_PER_ENV_MISMATCH * audit.environmentMismatches.length;
 
     if (!audit.primaryLanguageMatch) {
         score = Math.min(score, CAP_PRIMARY_LANGUAGE_MISMATCH);
@@ -107,8 +117,6 @@ const computeScore = (audit: LLMAudit): number => {
     if (missingMustHaves >= 2) {
         score = Math.min(score, CAP_TWO_MISSING_MUST_HAVES);
     }
-
-    score -= PENALTY_PER_ENV_MISMATCH * audit.environmentMismatches.length;
 
     return Math.round(Math.max(0, Math.min(1, score)) * 100) / 100;
 };
@@ -140,17 +148,45 @@ const buildReasoning = (audit: LLMAudit): string => {
 
 const SYSTEM_PROMPT = `You are a strict job-fit auditor, not a recruiter. Do not be generous.
 Rules:
-- Evaluate each requirement in the job separately.
+- Extract only hard requirements: programming languages, frameworks, tools, years of experience, seniority, degree, and domain. Evaluate each one separately.
+- Ignore soft skills and culture phrases (e.g. fast-paced, customer-facing, communication, team player, ownership, self-starter). They are never requirements.
+- Category "language" means programming languages only. Ignore spoken-language requirements unless a language other than English is required.
+- Location and work arrangement are never requirements; handle them only as environment mismatches.
 - Mark a requirement "met" ONLY if the resume shows it in actual work experience, and quote that evidence briefly in resumeEvidence.
 - A skill that appears only in a skills list, with no role or project using it, is "partial".
 - Do NOT credit transferable skills. For example, Node.js experience does not satisfy a Java requirement.
 - If a requirement includes years of experience, compare it with the actual years in the work history.
 - Set primaryLanguageMatch to false if the job's main required language or stack is not used in the resume's work experience.
 - Compare the job's seniority level with the resume's total experience and titles.
-- List every environment mismatch: primary language/stack, seniority, domain, onsite or location, work authorization.
+- List every environment mismatch: primary language/stack, seniority, domain, work authorization, and work arrangement or location. Judge work arrangement and location only against CANDIDATE PREFERENCES, never against the resume.
 - Ignore boilerplate (benefits, equal opportunity text, legal notices, buttons).`;
 
-/** Remove trailing boilerplate that only adds noise to the model input. */
+const WORK_TYPE_LABELS: Record<WorkType, string> = {
+    on_site: "on-site",
+    remote: "remote",
+    hybrid: "hybrid",
+};
+
+/**
+ * The candidate's work arrangement and location preferences, taken from the
+ * saved search (config/search.json), so the LLM doesn't guess them from the resume.
+ */
+const buildCandidatePreferences = (): string => {
+    const { workTypes, location } = loadSearchConfig();
+    const accepted = workTypes?.length
+        ? workTypes.map((type) => WORK_TYPE_LABELS[type]).join(", ")
+        : "any work arrangement";
+    return [
+        `- Accepts ${accepted} roles. Do not flag these as mismatches.`,
+        `- Open to roles located anywhere in ${location}.`,
+    ].join("\n");
+};
+
+/**
+ * Remove trailing boilerplate from a job description. Run it on the description
+ * alone, before the length cut: on the full job text it would also drop the
+ * fields that come after the description.
+ */
 const stripBoilerplate = (jobText: string): string => {
     const cutMarkers = [
         "Additional Information",
@@ -172,7 +208,8 @@ const stripBoilerplate = (jobText: string): string => {
 /** Ask the LLM to audit a job against a resume, then compute the score in code. Returns null if the model gives no parsed result. */
 const scoreJobFitWithLLM = async (
     jobText: string,
-    resumeText: string
+    resumeText: string,
+    preferences: string
 ): Promise<LLMResult | null> => {
     const response = await openai.chat.completions.parse({
         model: OPENAI_MODEL,
@@ -182,9 +219,7 @@ const scoreJobFitWithLLM = async (
             { role: "system", content: SYSTEM_PROMPT },
             {
                 role: "user",
-                content: `JOB DESCRIPTION:\n${stripBoilerplate(
-                    jobText
-                )}\n\nRESUME:\n${resumeText}`,
+                content: `JOB DESCRIPTION:\n${jobText}\n\nRESUME:\n${resumeText}\n\nCANDIDATE PREFERENCES:\n${preferences}`,
             },
         ],
     });
@@ -225,16 +260,31 @@ export const classifyJobsByLLMScore = async (
 }> => {
     const passed: JobLLMMatchResult[] = [];
     const rejected: JobLLMMatchResult[] = [];
+    // Read once per run; the same for every job.
+    const preferences = buildCandidatePreferences();
 
     const results = await mapWithConcurrency(
         matches,
         CONCURRENCY,
         async (match) => {
-            const jobText = constructJobText(match.job);
+            // Strip boilerplate first so the length limit is spent on real content.
+            const jobText = constructJobText(
+                {
+                    ...match.job,
+                    descriptionText: stripBoilerplate(
+                        match.job.descriptionText ?? ""
+                    ),
+                },
+                LLM_DESCRIPTION_LIMIT
+            );
             const resume = await getResume(match.resumeId);
             if (!resume?.text) return;
 
-            const llmResult = await scoreJobFitWithLLM(jobText, resume.text);
+            const llmResult = await scoreJobFitWithLLM(
+                jobText,
+                resume.text,
+                preferences
+            );
             if (!llmResult) return;
 
             const entry: JobLLMMatchResult = {

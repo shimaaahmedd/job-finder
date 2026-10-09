@@ -1,12 +1,22 @@
 import { ApifyJobResult } from "../types/job";
 
 /**
- * Flatten a job into the plain text we embed and send to the LLM. The
- * description is capped at 2000 chars to bound token cost; the other fields
- * carry most of the signal for matching.
+ * Description cap for embeddings. Kept short to bound token cost; the other
+ * fields carry most of the signal for semantic matching. Changing it changes
+ * every cosine score, so retune COSINE_THRESHOLD if you do.
  */
-export function constructJobText(job: ApifyJobResult): string {
-    const descriptionText = job.descriptionText?.slice(0, 2000) ?? "";
+export const EMBEDDING_DESCRIPTION_LIMIT = 2000;
+
+/**
+ * Flatten a job into the plain text we embed and send to the LLM, with the
+ * description cut to `descriptionLimit` characters.
+ */
+export function constructJobText(
+    job: ApifyJobResult,
+    descriptionLimit = EMBEDDING_DESCRIPTION_LIMIT
+): string {
+    const descriptionText =
+        job.descriptionText?.slice(0, descriptionLimit) ?? "";
     return `
         Job Title: ${job.title}
         Company: ${job.companyName}
