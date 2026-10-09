@@ -5,7 +5,7 @@ const getBadgeColor = (
     threshold: number | null,
     highScore: number | null
 ) => {
-    if (threshold === null) return "bg-gray-100 text-gray=600";
+    if (threshold === null) return "bg-gray-100 text-gray-600";
     if (score < threshold) return "bg-gray-100 text-gray-600";
     if (highScore != null && score >= highScore)
         return "bg-green-100 text-green-800";

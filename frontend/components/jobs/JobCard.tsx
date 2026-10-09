@@ -61,7 +61,7 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                     <ScoreBadge
                         score={llmScore ?? 0}
                         highScore={highScore ?? 0.7}
-                        threshold={llmThreshold ?? 0.85}
+                        threshold={llmThreshold ?? 0.8}
                     />
                 </div>
                 <p className="font-semibold text-2xl">{title}</p>
@@ -119,20 +119,14 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                     .join(" ")}
                             </p>
                         )}
-                        {rejectionDetails && (
-                            <p className="text-xl">
-                                <span className="font-semibold">
-                                    Rejection Details:{" "}
-                                </span>
-                                {rejectionDetails}
-                            </p>
-                        )}
-                        {llmReasoning && (
+                        {llmReasoning ? (
                             <>
                                 <p
                                     className={cn(
                                         "text-xl",
-                                        !expandedReason && "line-clamp-2"
+                                        !expandedReason &&
+                                            llmReasoning.length > 120 &&
+                                            "line-clamp-2"
                                     )}
                                 >
                                     <span className="font-semibold">
@@ -141,18 +135,53 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                     {llmReasoning}
                                 </p>
 
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setExpandedReason((prev) => !prev);
-                                    }}
-                                    className="mt-1 text-xs text-blue-600 hover:underline"
-                                >
-                                    {expandedReason ? "See less" : "See more"}
-                                </button>
+                                {llmReasoning.length > 120 && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedReason((prev) => !prev);
+                                        }}
+                                        className="mt-1 text-xs text-blue-600 hover:underline"
+                                    >
+                                        {expandedReason
+                                            ? "See less"
+                                            : "See more"}
+                                    </button>
+                                )}
                             </>
-                        )}
+                        ) : rejectionDetails ? (
+                            <>
+                                <p
+                                    className={cn(
+                                        "text-xl",
+                                        !expandedReason &&
+                                            rejectionDetails.length > 120 &&
+                                            "line-clamp-2"
+                                    )}
+                                >
+                                    <span className="font-semibold">
+                                        Rejection Details:{" "}
+                                    </span>
+                                    {rejectionDetails}
+                                </p>
+
+                                {rejectionDetails.length > 120 && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedReason((prev) => !prev);
+                                        }}
+                                        className="mt-1 text-xs text-blue-600 hover:underline"
+                                    >
+                                        {expandedReason
+                                            ? "See less"
+                                            : "See more"}
+                                    </button>
+                                )}
+                            </>
+                        ) : null}
                         {applyType && (
                             <p className="text-xl">
                                 <span className="font-semibold">
@@ -168,7 +197,7 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                     source.slice(1)}
                             </p>
                         )}
-                        {cosineScore && (
+                        {cosineScore != null && (
                             <p className="text-xl">
                                 <span className="font-semibold">
                                     Cosine Score:{" "}
@@ -176,7 +205,7 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                 {cosineScore}
                             </p>
                         )}
-                        {cosineThreshold && (
+                        {cosineThreshold != null && (
                             <p className="text-xl">
                                 <span className="font-semibold">
                                     Cosine Threshold:{" "}
@@ -184,7 +213,7 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                 {cosineThreshold}
                             </p>
                         )}
-                        {llmThreshold && (
+                        {llmThreshold != null && (
                             <p className="text-xl">
                                 <span className="font-semibold">
                                     LLM Threshold:{" "}
@@ -192,8 +221,8 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                 {llmThreshold}
                             </p>
                         )}
-                        {(applyUrl || link) && (
-                            <div className="flex justify-between items-center gap-4">
+                        <div className="flex justify-between items-center gap-4">
+                            {(applyUrl || link) && (
                                 <a
                                     href={applyUrl || link || undefined}
                                     target="_blank"
@@ -202,15 +231,15 @@ export const JobCard = ({ job, highScore }: JobCardProps) => {
                                 >
                                     Link
                                 </a>
-                                <JobStatusDropdown
-                                    applicationStatus={applicationStatus}
-                                    jobId={job.id}
-                                    onChange={(jobId, applicationStatus) =>
-                                        markAs({ jobId, applicationStatus })
-                                    }
-                                />
-                            </div>
-                        )}
+                            )}
+                            <JobStatusDropdown
+                                applicationStatus={applicationStatus}
+                                jobId={job.id}
+                                onChange={(jobId, applicationStatus) =>
+                                    markAs({ jobId, applicationStatus })
+                                }
+                            />
+                        </div>
                         {formattedAppliedAt && (
                             <p
                                 title={`Applied ${formattedAppliedAt}`}
