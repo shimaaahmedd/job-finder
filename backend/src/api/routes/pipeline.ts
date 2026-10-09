@@ -7,25 +7,31 @@ import { StartOutcome } from "../../types/pipeline";
  */
 const router = Router();
 
-// POST /api/pipeline — start a run (or report that one is already in flight).
-// Returns 202 immediately with the run state plus `alreadyRunning`. A discovery
-// run inside the cooldown gets 429 with Retry-After and `retryAfterMs`.
+// POST /api/pipeline: start a run (or report that one is already in flight).
+// Body must include `discovery` (boolean): true fetches from Apify (paid),
+// false only resumes jobs already in the DB. Returns 202 with the run state
+// plus `alreadyRunning`. A discovery run inside the cooldown gets 429 with
+// Retry-After (seconds) and `retryAfterMs`.
 router.post("/", (req, res) => {
-    const discovery = req.body?.discovery ?? true;
+    const discovery = req.body?.discovery;
     if (typeof discovery !== "boolean") {
-        return res
-            .status(400)
-            .json({ status: "error", message: "discovery must be a boolean" });
+        res.status(400).json({
+            status: "error",
+            message: "discovery must be a boolean",
+        });
+        return;
     }
+
     const result = startPipeline(discovery);
 
     if (result.outcome === StartOutcome.CoolingDown) {
         res.setHeader("Retry-After", Math.ceil(result.retryAfterMs / 1000));
-        return res.status(429).json({
+        res.status(429).json({
             status: "error",
             message: "Discovery is cooling down",
             retryAfterMs: result.retryAfterMs,
         });
+        return;
     }
 
     res.status(202).json({
@@ -34,7 +40,7 @@ router.post("/", (req, res) => {
     });
 });
 
-// GET /api/pipeline/status — poll this for progress.
+// GET /api/pipeline/status: poll this for progress.
 router.get("/status", (_req, res) => {
     res.status(200).json(getPipelineState());
 });
