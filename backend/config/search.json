@@ -2,12 +2,12 @@
     "linkedInSearch": {
         "id": "fullstack-us",
         "label": "Full Stack Engineer - US Remote",
-        "keywords": "Full Stack Engineer",
+        "keywords": "Full Stack Engineer With 2-4 Years Of Experience, TypeScript, Node.js And React",
         "location": "United States",
         "geoId": "103644278",
         "datePosted": "past_24_hours",
         "jobTypes": ["full_time", "contract"],
-        "experienceLevels": ["mid_senior"],
+        "experienceLevels": ["associate", "mid_senior"],
         "workTypes": ["remote", "hybrid"],
         "enabled": true
     }

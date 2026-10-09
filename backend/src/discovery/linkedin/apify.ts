@@ -17,12 +17,13 @@ import { buildLinkedInUrl } from "./linkedinUrlBuilder";
  * LinkedIn account stay out of it. We only ever talk to Apify's REST API.
  */
 
-// How many jobs to pull. Keep small while testing — Apify bills per run/result.
-const JOB_COUNT = 10;
+// Max jobs per search URL (`limitPerSource`). Keep modest while testing —
+// every job costs Apify compute (more with scrapeCompany) and LLM calls downstream.
+const JOB_COUNT = 25;
 const ACTOR_ID = "curious_coder/linkedin-jobs-scraper";
 
 /** Read the saved search config fresh each call, so edits don't need a server restart. */
-function loadSearchConfig(): LinkedInSearchConfig {
+export function loadSearchConfig(): LinkedInSearchConfig {
     const searchPath = join(__dirname, "../../../config/search.json");
     const { linkedInSearch } = JSON.parse(readFileSync(searchPath, "utf8"));
     return linkedInSearch;
@@ -32,7 +33,7 @@ function loadSearchConfig(): LinkedInSearchConfig {
  * Infer how the job is applied to from its apply URL: a linkedin.com URL
  * means LinkedIn Easy Apply, anything else is the company's own site.
  */
-const classifyApplyType =(job: ApifyJob): ApplyType => {
+const classifyApplyType = (job: ApifyJob): ApplyType => {
     if (!job.applyUrl || job.applyUrl === "") return "unknown";
     if (job.applyUrl.includes("linkedin.com")) return "easy_apply";
     return "external";
@@ -58,8 +59,9 @@ export async function fetchApifyJobs(): Promise<ApifyJobResult[]> {
 
     // .call() starts the run AND blocks until it finishes (or fails/times out).
     const run = await client.actor(ACTOR_ID).call({
-        count: JOB_COUNT,
-        scrapeCompany: true,
+        autoConvertToAiSearch: true,
+        limitPerSource: JOB_COUNT,
+        scrapeCompany: false,
         splitByLocation: false,
         splitCountry: "US",
         urls: [searchUrl],
