@@ -4,6 +4,14 @@
  * codes (f_TPR, f_JT, f_E, f_WT).
  */
 
+import {
+    DatePosted,
+    ExperienceLevel,
+    JobType,
+    LinkedInSearchConfig,
+    WorkType,
+} from "../../types/search";
+
 // --- LinkedIn filter codes -----------------------------------------------
 
 /** f_TPR: "posted within the last N seconds". */

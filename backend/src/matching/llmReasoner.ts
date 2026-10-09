@@ -7,6 +7,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { LLM_THRESHOLD } from "./constants";
 import { loadSearchConfig } from "../discovery/linkedin/apify";
+import { WorkType } from "../types/search";
 
 /**
  * Matches jobs to resumes in two steps:

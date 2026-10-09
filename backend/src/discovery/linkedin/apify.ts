@@ -4,6 +4,7 @@ import { ApifyJob, ApifyJobResult, ApplyType } from "../../types/job";
 import { join } from "path";
 import { readFileSync } from "fs";
 import { buildLinkedInUrl } from "./linkedinUrlBuilder";
+import { LinkedInSearchConfig } from "../../types/search";
 
 /**
  * Discovery via Apify.

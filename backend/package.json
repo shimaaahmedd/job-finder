@@ -6,10 +6,10 @@
     "type": "commonjs",
     "main": "dist/index.js",
     "scripts": {
-        "start": "tsx src/index.ts",
+        "start": "node dist/index.js",
         "dev": "nodemon --watch src --ext ts,sql --exec \"tsx src/index.ts\"",
         "migrate": "tsx src/db/migrate.ts",
-        "discover": "tsx src/discovery/apify.ts",
+        "discover": "tsx src/discovery/linkedin/apify.ts",
         "load-resumes": "tsx src/resumes/resumeLoader.ts",
         "embed-resumes": "tsx src/matching/embeddings.ts",
         "build": "tsc",
