@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getActiveResumes } from "../../db/resumeRepository";
+import { listResumeSummaries } from "../../db/resumeRepository";
 
 /**
  * Resume management endpoints.
@@ -11,8 +11,15 @@ const router = Router();
 
 // GET /api/resumes — list the active resume version for each label.
 router.get("/", async (_req, res) => {
-    const resumes = await getActiveResumes();
-    res.status(200).json(resumes);
+    try {
+        res.status(200).json(await listResumeSummaries());
+    } catch (error) {
+        console.error("Failed to load resumes:", error);
+        res.status(500).json({
+            status: "error",
+            message: "Failed to load resumes",
+        });
+    }
 });
 
 export default router;

@@ -1,5 +1,5 @@
 import { pool } from "./connection";
-import type { NewResume, Resume } from "../types/resume";
+import type { NewResume, Resume, ResumeListItem } from "../types/resume";
 
 /**
  * Data-access layer for the `resumes` table. Everything that touches resume
@@ -76,6 +76,20 @@ export async function getActiveResumes(userId = "default"): Promise<Resume[]> {
         [userId]
     );
     return rows.map(parseEmbedding);
+}
+
+/** Resume summaries for the API: no text, no embedding, no file path. */
+export async function listResumeSummaries(
+    userId = "default"
+): Promise<ResumeListItem[]> {
+    const { rows } = await pool.query<ResumeListItem>(
+        `SELECT id, label, version, is_active AS "isActive", created_at AS "createdAt"
+         FROM resumes
+         WHERE user_id = $1 AND is_active = true
+         ORDER BY label`,
+        [userId]
+    );
+    return rows;
 }
 
 /** Mark a resume version as no longer active (superseded by a newer upload). */

@@ -17,3 +17,12 @@ export type NewResume = Pick<
     Resume,
     "user_id" | "label" | "version" | "text" | "file_path" | "is_active"
 >;
+
+/** Safe-to-expose resume fields: no text and no embedding. */
+export interface ResumeListItem {
+    id: string;
+    label: string;
+    version: number;
+    isActive: boolean;
+    createdAt: string;
+}
