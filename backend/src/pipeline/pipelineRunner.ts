@@ -1,4 +1,10 @@
-import { PipelineRunStatus, PipelineState } from "../types/pipeline";
+import {
+    PipelineRunStatus,
+    PipelineState,
+    StartOutcome,
+    StartResult,
+} from "../types/pipeline";
+import { getCooldownMs, getCooldownRemainingMs } from "./cooldown";
 import { runPipeline } from "./runPipeline";
 
 /**
@@ -11,6 +17,11 @@ import { runPipeline } from "./runPipeline";
 
 /** The run currently executing, or null when idle. Guards against overlap. */
 let inFlightRun: Promise<void> | null = null;
+/**
+ * When the last successful discovery run ended. Drives the cooldown; failed
+ * runs don't set it, so a fixed config can be retried right away.
+ */
+let lastDiscoveryFinishedAt: Date | null = null;
 
 /** Status of the current or most recent run, served by GET /api/pipeline/status. */
 let state: PipelineState = {
@@ -28,11 +39,23 @@ export function getPipelineState(): PipelineState {
 
 /**
  * Starts a run in the background. Returns immediately.
- * If a run is already in flight, does nothing (single-flight).
+ * If a run is already in flight, does nothing (single-flight). A discovery run
+ * within the cooldown of the last successful one is refused with the wait time.
  */
-export function startPipeline(discovery: boolean = true): { started: boolean } {
+export function startPipeline(discovery: boolean = true): StartResult {
     if (inFlightRun) {
-        return { started: false };
+        return { outcome: StartOutcome.AlreadyRunning };
+    }
+
+    if (discovery) {
+        const retryAfterMs = getCooldownRemainingMs(
+            lastDiscoveryFinishedAt,
+            new Date(),
+            getCooldownMs()
+        );
+        if (retryAfterMs > 0) {
+            return { outcome: StartOutcome.CoolingDown, retryAfterMs };
+        }
     }
 
     state = {
@@ -50,6 +73,8 @@ export function startPipeline(discovery: boolean = true): { started: boolean } {
                 status: PipelineRunStatus.Completed,
                 finishedAt: new Date().toISOString(),
             };
+
+            if (discovery) lastDiscoveryFinishedAt = new Date();
         })
         .catch((error) => {
             console.error("Pipeline run failed:", error);
@@ -64,5 +89,5 @@ export function startPipeline(discovery: boolean = true): { started: boolean } {
             inFlightRun = null;
         });
 
-    return { started: true };
+    return { outcome: StartOutcome.Started };
 }

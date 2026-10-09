@@ -19,3 +19,17 @@ export interface PipelineState {
     /** Error message when status is 'failed', else null. */
     error: string | null;
 }
+
+export const StartOutcome = {
+    Started: "started",
+    AlreadyRunning: "already_running",
+    CoolingDown: "cooling_down",
+} as const;
+
+export type StartOutcome = (typeof StartOutcome)[keyof typeof StartOutcome];
+
+/** What startPipeline returns: the outcome, plus the wait time when it is cooling down. */
+export type StartResult =
+    | { outcome: typeof StartOutcome.Started }
+    | { outcome: typeof StartOutcome.AlreadyRunning }
+    | { outcome: typeof StartOutcome.CoolingDown; retryAfterMs: number };

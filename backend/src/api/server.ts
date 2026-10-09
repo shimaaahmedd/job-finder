@@ -7,6 +7,7 @@ import pipelineRouter from "./routes/pipeline";
 import cors from "cors";
 import { pinoHttp } from "pino-http";
 import { logger } from "../lib/logger";
+import { requireApiKey } from "./middleware/requireApiKey";
 
 /**
  * Builds the Express application: middleware + mounted routes.
@@ -27,6 +28,9 @@ export function createServer(): Application {
     app.get("/health", (_req, res) => {
         res.json({ status: "ok" });
     });
+
+    // Adding API key
+    app.use("/api", requireApiKey);
 
     // Feature routes.
     app.use("/api/jobs", jobsRouter);

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getPipelineState, startPipeline } from "../../pipeline/pipelineRunner";
+import { StartOutcome } from "../../types/pipeline";
 
 /**
  * Pipeline management endpoints.
@@ -7,7 +8,8 @@ import { getPipelineState, startPipeline } from "../../pipeline/pipelineRunner";
 const router = Router();
 
 // POST /api/pipeline — start a run (or report that one is already in flight).
-// Returns 202 immediately with the run state plus `alreadyRunning`.
+// Returns 202 immediately with the run state plus `alreadyRunning`. A discovery
+// run inside the cooldown gets 429 with Retry-After and `retryAfterMs`.
 router.post("/", (req, res) => {
     const discovery = req.body?.discovery ?? true;
     if (typeof discovery !== "boolean") {
@@ -15,10 +17,20 @@ router.post("/", (req, res) => {
             .status(400)
             .json({ status: "error", message: "discovery must be a boolean" });
     }
-    const { started } = startPipeline(discovery);
+    const result = startPipeline(discovery);
+
+    if (result.outcome === StartOutcome.CoolingDown) {
+        res.setHeader("Retry-After", Math.ceil(result.retryAfterMs / 1000));
+        return res.status(429).json({
+            status: "error",
+            message: "Discovery is cooling down",
+            retryAfterMs: result.retryAfterMs,
+        });
+    }
+
     res.status(202).json({
         ...getPipelineState(),
-        alreadyRunning: !started,
+        alreadyRunning: result.outcome === StartOutcome.AlreadyRunning,
     });
 });
 

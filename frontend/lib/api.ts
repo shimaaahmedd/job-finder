@@ -20,7 +20,11 @@ if (!prefix) {
     throw new Error("NEXT_PUBLIC_API_URL is not set");
 }
 
-const kyClient = ky.create({ prefix });
+const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+
+if (!apiKey) throw new Error("NEXT_PUBLIC_API_KEY is not set");
+
+const kyClient = ky.create({ headers: { "x-api-key": apiKey }, prefix });
 
 /** Filters/pagination for GET /api/jobs. Omitted fields use the server defaults. */
 export interface GetJobOptions {
@@ -56,7 +60,10 @@ export const getJobs = async ({
         .json<Paginated<Job>>();
 };
 
-/** POST /api/pipeline — start a run in the background. */
+/**
+ * POST /api/pipeline — start a run in the background. A discovery run inside
+ * the cooldown throws a ky HTTPError (429) whose `data` is a PipelineCooldownError.
+ */
 export const startPipeline = async (
     discovery = true
 ): Promise<StartPipelineResponse> => {

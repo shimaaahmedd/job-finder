@@ -23,3 +23,10 @@ export interface PipelineState {
 export interface StartPipelineResponse extends PipelineState {
     alreadyRunning: boolean;
 }
+
+/** POST /api/pipeline 429 body: discovery is cooling down. */
+export interface PipelineCooldownError {
+    status: "error";
+    message: string;
+    retryAfterMs: number;
+}
