@@ -50,6 +50,9 @@ export const ApplyType = {
 
 export type ApplyType = (typeof ApplyType)[keyof typeof ApplyType];
 
+/** Date sort direction for the job list (GET /api/jobs?sort=). */
+export type SortDirection = "asc" | "desc";
+
 /** Job board a job was discovered on. */
 export type JobSource = "linkedin" | "indeed";
 
@@ -162,7 +165,7 @@ export interface JobListItem {
     suggestedResumeVersion: number | null;
     cosineThreshold: number | null;
     llmThreshold: number | null;
-    applicationStatus: string | null;
+    applicationStatus: string;
     appliedAt: Date | null;
     closedAt: Date | null;
     postedAt: Date | null;

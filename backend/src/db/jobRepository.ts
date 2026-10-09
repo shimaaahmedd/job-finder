@@ -7,6 +7,7 @@ import {
     JobStatus,
     Paginated,
     RejectionReason,
+    SortDirection,
 } from "../types/job";
 
 /**
@@ -237,26 +238,29 @@ export async function updateJob(
 
 /**
  * One page of jobs filtered by status, applicationStatus and active (true = not
- * closed); an undefined filter matches everything. Best LLM score first, then
- * newest.
+ * closed); an undefined filter matches everything. With `sort`, ordered by
+ * posted date in that direction; without it, best LLM score first, then newest.
  */
 export async function getJobsByStatus(
     status: JobStatus | undefined,
     applicationStatus: ApplicationStatus | undefined,
     active: boolean | undefined,
     limit = 25,
-    offset = 0
+    offset = 0,
+    sort?: SortDirection
 ): Promise<Paginated<JobListItem>> {
+    // Picked from a fixed set, never from raw input: ASC/DESC can't be a query parameter.
+    const direction = sort === "asc" ? "ASC" : "DESC";
+    const orderBy = sort
+        ? `j.posted_at ${direction} NULLS LAST, j.created_at ${direction}`
+        : `j.llm_score DESC NULLS LAST, j.posted_at DESC NULLS LAST, j.created_at DESC`;
+
     const listQuery = `
         SELECT ${JOB_LIST_COLUMNS}
         FROM jobs j
         ${JOB_LIST_RESUME_JOIN}
         WHERE ($1::varchar IS NULL OR j.status = $1) AND ($2::varchar IS NULL OR j.application_status = $2) AND ($3::boolean IS NULL OR (j.closed_at IS NULL) = $3)
-        ORDER BY
-            j.llm_score DESC NULLS LAST,
-            j.posted_at DESC NULLS LAST,
-            j.created_at DESC,
-            j.id
+        ORDER BY ${orderBy}, j.id
         LIMIT $4 OFFSET $5
     `;
 

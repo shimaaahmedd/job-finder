@@ -37,12 +37,14 @@ const GetJobsQuerySchema = z.object({
         .optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
     offset: z.coerce.number().int().min(0).default(0),
+    // Posted-date direction; omitted keeps the default best-match order.
+    sort: z.enum(["asc", "desc"]).optional(),
 });
 
 // TODO: GET    /api/jobs/:id        — fetch a single job
 // TODO: DELETE /api/jobs/rejected   — clear all rejected jobs
 
-// GET /api/jobs?status=&applicationStatus=&active=&limit=&offset= — list jobs,
+// GET /api/jobs?status=&applicationStatus=&active=&limit=&offset=&sort= — list jobs,
 // filtered by any of status / applicationStatus / active (true = not closed,
 // false = closed); omitted filters match everything. Returns { items, total }.
 router.get("/", async (req, res) => {
@@ -55,14 +57,15 @@ router.get("/", async (req, res) => {
                 errors: parsed.error.issues,
             });
         }
-        const { status, applicationStatus, active, limit, offset } =
+        const { status, applicationStatus, active, limit, offset, sort } =
             parsed.data;
         const jobs = await getJobsByStatus(
             status,
             applicationStatus,
             active,
             limit,
-            offset
+            offset,
+            sort
         );
         res.status(200).json(jobs);
     } catch (error) {

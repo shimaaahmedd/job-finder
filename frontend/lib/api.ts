@@ -1,4 +1,10 @@
-import { ApplicationStatus, Job, JobStatus, Paginated } from "@/types/job";
+import {
+    ApplicationStatus,
+    Job,
+    JobStatus,
+    Paginated,
+    SortDirection,
+} from "@/types/job";
 import type { PipelineState, StartPipelineResponse } from "@/types/pipeline";
 import ky from "ky";
 
@@ -23,6 +29,8 @@ export interface GetJobOptions {
     active?: boolean;
     limit?: number;
     offset?: number;
+    /** Posted-date order; omitted keeps the server's best-match order. */
+    sort?: SortDirection;
 }
 
 /** GET /api/jobs — one page of jobs; omitted filters match everything. */
@@ -32,10 +40,18 @@ export const getJobs = async ({
     active,
     limit,
     offset,
+    sort,
 }: GetJobOptions = {}): Promise<Paginated<Job>> => {
     return kyClient
         .get("api/jobs", {
-            searchParams: { status, applicationStatus, active, limit, offset },
+            searchParams: {
+                status,
+                applicationStatus,
+                active,
+                limit,
+                offset,
+                sort,
+            },
         })
         .json<Paginated<Job>>();
 };

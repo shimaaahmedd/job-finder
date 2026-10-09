@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useJobs } from "@/hooks/useJobs";
-import { ApplicationStatus, JobStatus } from "@/types/job";
+import { ApplicationStatus, JobStatus, SortDirection } from "@/types/job";
 import { JobCard } from "./JobCard";
 import { HighScoreInput } from "./HighScoreInput";
 import { StatusFilter } from "./StatusFilter";
 import { ApplicationStatusFilter } from "./ApplicationStatusFilter";
 import { ExpireToggle } from "./ExpireToggle";
+import { DateSortFilter } from "./DateSortFilter";
 
 const PAGE_SIZE = 21;
 
@@ -21,6 +22,7 @@ export function JobsList() {
         ApplicationStatus | undefined
     >(ApplicationStatus.NotApplied);
     const [active, setActive] = useState(true);
+    const [sort, setSort] = useState<SortDirection | undefined>(undefined);
 
     const handleStatusChange = (newStatus: JobStatus | undefined) => {
         setStatus(newStatus);
@@ -34,6 +36,11 @@ export function JobsList() {
         setPage(0); // reset page so you don't land on an empty page
     };
 
+    const handleSortChange = (newSort: SortDirection | undefined) => {
+        setSort(newSort);
+        setPage(0); // a new order starts from the first page
+    };
+
     const toggleExpiryStatusChange = () => {
         setActive((prev) => !prev);
         setPage(0);
@@ -45,6 +52,7 @@ export function JobsList() {
         active,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
+        sort,
     });
 
     const filter = (
@@ -58,6 +66,10 @@ export function JobsList() {
         />
     );
 
+    const sortFilter = (
+        <DateSortFilter sort={sort} onChange={handleSortChange} />
+    );
+
     const expiryToggle = (
         <ExpireToggle active={active} onClick={toggleExpiryStatusChange} />
     );
@@ -68,6 +80,7 @@ export function JobsList() {
                 <div className="flex gap-4">
                     {filter}
                     {applicationFilter}
+                    {sortFilter}
                     {expiryToggle}
                 </div>
                 <p>Loading...</p>
@@ -80,6 +93,7 @@ export function JobsList() {
                 <div className="flex gap-4">
                     {filter}
                     {applicationFilter}
+                    {sortFilter}
                     {expiryToggle}
                 </div>
                 <p>Something went wrong.</p>
@@ -92,6 +106,7 @@ export function JobsList() {
                 <div className="flex gap-4">
                     {filter}
                     {applicationFilter}
+                    {sortFilter}
                     {expiryToggle}
                 </div>
                 <p className="pl-4">No jobs yet.</p>
@@ -107,6 +122,7 @@ export function JobsList() {
                     <div className="flex gap-4">
                         {filter}
                         {applicationFilter}
+                        {sortFilter}
                         {expiryToggle}
                     </div>
                     <HighScoreInput

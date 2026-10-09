@@ -27,6 +27,9 @@ export const ApplicationStatus = {
 export type ApplicationStatus =
     (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
+/** Posted-date sort direction for the jobs list. */
+export type SortDirection = "asc" | "desc";
+
 /** How an application is submitted. */
 export const ApplyType = {
     External: "external",
