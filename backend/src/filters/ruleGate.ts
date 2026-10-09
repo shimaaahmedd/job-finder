@@ -113,16 +113,8 @@ function findKeyword(
 
 /** Returns a rejection reason for the first failing rule, or null if it passes. */
 function evaluate(job: ApifyJobResult): string | null {
-    // 1. Too many years of experience required.
-    const exp = rules.experienceThreshold;
-    if (exp.enabled) {
-        const required = parseRequiredYears(job.descriptionText);
-        if (required !== null && required > exp.maxYears) {
-            return `Requires ${required} years of experience (max ${exp.maxYears})`;
-        }
-    }
-
-    // 2. Excluded keyword in the job title.
+    // 1. Excluded keyword in the job title. Checked first: the title is the
+    // clearest signal, so it's the reason recorded when both rules would fail.
     const titleKeywords = rules.excludedTitleKeywords;
     if (titleKeywords.enabled) {
         const hit = findKeyword(
@@ -131,6 +123,15 @@ function evaluate(job: ApifyJobResult): string | null {
             titleKeywords.allowedPhrases
         );
         if (hit) return `Excluded title keyword: "${hit}"`;
+    }
+
+    // 2. Too many years of experience required.
+    const exp = rules.experienceThreshold;
+    if (exp.enabled) {
+        const required = parseRequiredYears(job.descriptionText);
+        if (required !== null && required > exp.maxYears) {
+            return `Requires ${required} years of experience (max ${exp.maxYears})`;
+        }
     }
 
     // 3. Excluded keyword in the job description.
