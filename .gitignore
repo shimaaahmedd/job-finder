@@ -4,3 +4,6 @@ Thumbs.db
 
 # Personal Claude Code settings
 .claude/settings.local.json
+.claude/
+backend/.neon
+skills-lock.json
